@@ -360,6 +360,100 @@ export function startGitUpdate() {
     };
 }
 
+const updateCheckCache = {
+    result: null,
+    timestamp: 0,
+};
+
+const UPDATE_CHECK_CACHE_TTL = 30 * 60 * 1000;
+
+export async function checkForUpdates() {
+    const now = Date.now();
+    if (updateCheckCache.result && (now - updateCheckCache.timestamp) < UPDATE_CHECK_CACHE_TTL) {
+        return updateCheckCache.result;
+    }
+
+    const repo = simpleGit({ baseDir: serverDirectory });
+    const isRepo = await repo.checkIsRepo(CheckRepoActions.IS_REPO_ROOT);
+
+    let result;
+
+    if (isRepo) {
+        const branch = (await repo.revparse(['--abbrev-ref', 'HEAD'])).trim();
+        await repo.fetch();
+        const currentCommit = (await repo.revparse(['HEAD'])).trim();
+
+        let trackingBranch;
+        try {
+            trackingBranch = (await repo.revparse(['--abbrev-ref', '@{u}'])).trim();
+        } catch {
+            result = {
+                hasUpdate: false,
+                isGitRepo: true,
+                details: { currentCommit, branch, error: 'No upstream tracking branch' },
+            };
+            updateCheckCache.result = result;
+            updateCheckCache.timestamp = now;
+            return result;
+        }
+
+        const divergenceRaw = (await repo.raw(['rev-list', '--left-right', '--count', `HEAD...${trackingBranch}`])).trim();
+        const match = divergenceRaw.match(/(\d+)\s+(\d+)/);
+        const aheadCount = Number(match?.[1] ?? 0);
+        const behindCount = Number(match?.[2] ?? 0);
+        const remoteCommit = (await repo.revparse([trackingBranch])).trim();
+
+        result = {
+            hasUpdate: behindCount > 0,
+            isGitRepo: true,
+            details: { currentCommit, remoteCommit, behindCount, aheadCount, branch },
+        };
+    } else {
+        if (!githubRepository) {
+            throw new Error('GitHub repository metadata is unavailable.');
+        }
+
+        const { owner, repo: repoName } = githubRepository;
+        const releaseApiUrl = `https://api.github.com/repos/${owner}/${repoName}/releases/latest`;
+        const response = await fetch(releaseApiUrl, {
+            method: 'GET',
+            headers: {
+                Accept: 'application/vnd.github+json',
+                'User-Agent': 'Luker-Updater',
+            },
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to query latest GitHub release (${response.status}).`);
+        }
+
+        const payload = await response.json();
+        const latestTag = String(payload.tag_name || '');
+        const latestVersion = latestTag.replace(/^v/i, '');
+        const currentVersion = String(packageJson.version || '');
+
+        const apkAsset = Array.isArray(payload.assets)
+            ? payload.assets.find(a => typeof a?.browser_download_url === 'string' && a.name?.toLowerCase().endsWith('.apk'))
+            : null;
+
+        result = {
+            hasUpdate: latestVersion !== currentVersion,
+            isGitRepo: false,
+            details: {
+                currentVersion,
+                latestVersion,
+                latestTag,
+                downloadUrl: apkAsset?.browser_download_url || null,
+                releaseUrl: String(payload.html_url || ''),
+            },
+        };
+    }
+
+    updateCheckCache.result = result;
+    updateCheckCache.timestamp = now;
+    return result;
+}
+
 export async function fetchLatestApkReleaseInfo() {
     if (!githubRepository) {
         throw new Error('GitHub repository metadata is unavailable.');

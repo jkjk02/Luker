@@ -28,6 +28,7 @@ import {
 import { DEFAULT_USER, PUBLIC_DIRECTORIES } from '../constants.js';
 import { clearCapturedLogs, getCapturedLogs } from '../log-capture.js';
 import {
+    checkForUpdates,
     fetchLatestApkReleaseInfo,
     getGitUpdateStatus,
     startGitUpdate,
@@ -209,6 +210,16 @@ router.post('/logs/clear', requireAdminMiddleware, async (_request, response) =>
         return response.sendStatus(204);
     } catch (error) {
         console.error('Admin logs clear failed:', error);
+        return response.sendStatus(500);
+    }
+});
+
+router.post('/update/check', requireAdminMiddleware, async (_request, response) => {
+    try {
+        const result = await checkForUpdates();
+        return response.json(result);
+    } catch (error) {
+        console.error('Check for updates failed:', error);
         return response.sendStatus(500);
     }
 });

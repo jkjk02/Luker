@@ -301,6 +301,7 @@ import { initDataMaid } from './scripts/data-maid.js';
 import { clearItemizedPrompts, deleteItemizedPromptForMessage, deleteItemizedPrompts, findItemizedPromptSet, flushItemizedPromptsSave, initItemizedPrompts, itemizedParams, itemizedPrompts, loadItemizedPrompts, promptItemize, replaceItemizedPromptText, saveItemizedPrompts, saveItemizedPromptsDebounced, swapItemizedPrompts } from './scripts/itemized-prompts.js';
 import { getSystemMessageByType, initSystemMessages, SAFETY_CHAT, sendSystemMessage, system_message_types, system_messages } from './scripts/system-messages.js';
 import { initAnnouncements } from './scripts/announcements.js';
+import { initUpdateChecker } from './scripts/update-checker.js';
 import { event_types, eventSource } from './scripts/events.js';
 import {
     settleBranchCreated,
@@ -1866,6 +1867,7 @@ async function firstLoadInit() {
         () => initTextGenModelSelects(),
         () => initSystemMessages(),
         () => initAnnouncements(),
+        () => initUpdateChecker(),
         () => initExtensions(),
         () => bootstrapExtensions(),
         () => initExtensionSlashCommands(),
